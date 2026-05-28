@@ -10,9 +10,9 @@ export {
   ErrorBoundary,
 } from 'expo-router';
 
-// 💡 แก้ไข: บังคับให้หน้าเริ่มต้นของระบบรากวิ่งไปหาหน้าระบบลงชื่อเข้าใช้ (login) ก่อนเสมอ
+// 💡 จุดที่ 1: แก้จาก 'login' เป็น 'login/index'
 export const unstable_settings = {
-  initialRouteName: 'login', 
+  initialRouteName: 'login/index', 
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -45,8 +45,8 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        {/* 💡 แก้ไข: ประกาศลงทะเบียนหน้าต่างๆ ที่อยู่นอกกลุ่ม tabs ให้ตัวนำทาง (Stack) รู้จักให้ครบถ้วน */}
-        <Stack.Screen name="login" options={{ headerShown: false }} />
+        {/* 💡 จุดที่ 2: แก้ตรง name จาก "login" เป็น "login/index" */}
+        <Stack.Screen name="login/index" options={{ headerShown: false }} />
         <Stack.Screen name="permissions/index" options={{ headerShown: false }} />
         <Stack.Screen name="camera/index" options={{ headerShown: false }} />
         
