@@ -37,7 +37,7 @@ export default function LoginPage() {
         localStorage.setItem('user_id', data.user.id);
         
         // 🚀 3. ย้ายหน้าผ่านด่านไปยังลำดับถัดไป (เช่น หน้าขอสิทธิ์ หรือหน้ากล้องสแกนหน้า)
-        router.replace('/permissions'); 
+        router.replace('/permissions');
       }
     } catch (err) {
       console.error(err);
