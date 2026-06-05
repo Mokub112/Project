@@ -41,7 +41,7 @@ export default function TabLayout() {
             <TouchableOpacity
               key={tab.id}
               // ใช้ router.navigate เพื่อสลับหน้าภายในชุด Tabs อย่างนุ่มนวล
-              onPress={() => router.navigate(tab.route)}
+              onPress={() => router.navigate(tab.route as any)}
               activeOpacity={0.85}
               style={styles.tabButton}
             >
