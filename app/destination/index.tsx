@@ -1,32 +1,62 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TextInput, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+
+// สร้างอินเตอร์เฟซระบุประเภทข้อมูลสำหรับรองรับการเพิ่มพิกัดจริง
+interface Destination {
+  id: string;
+  title: string;
+  date: string;
+  distance: string;
+  time: string;
+}
 
 export default function DestinationPage() {
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
 
-  // 🏠 จำลองข้อมูลรายการจุดหมายปลายทาง "บ้าน" 4 รายการตามดีไซน์ Figma
-  const [destinations, setDestinations] = useState([
-    { id: '1', title: 'บ้าน', date: '5 มี.ค. 2026', distance: '45.2 กม.', time: '10:30 น.' },
-    { id: '2', title: 'บ้าน', date: '4 มี.ค. 2026', distance: '45.2 กม.', time: '10:30 น.' },
-    { id: '3', title: 'บ้าน', date: '5 มี.ค. 2026', distance: '45.2 กม.', time: '10:30 น.' },
-    { id: '4', title: 'บ้าน', date: '4 มี.ค. 2026', distance: '45.2 กม.', time: '10:30 น.' },
-  ]);
+  // 🎯 เคลียร์ค่าก้อนอาร์เรย์สมมติทิ้งทั้งหมด เพื่อให้หน้าจอเริ่มต้นว่างเปล่าคลีน ๆ ตามสั่งครับพี่!
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+
+  // ฟังก์ชันจำลองสำหรับปุ่มกดเครื่องหมายบวก (+) เพื่อเพิ่มจุดหมายใหม่เข้าสเตทจริง
+  const handleAddNewDestination = () => {
+    const newPlace: Destination = {
+      id: Date.now().toString(),
+      title: 'จุดหมายใหม่ที่บันทึก',
+      date: 'วันนี้',
+      distance: '0.0 กม.',
+      time: '--:-- น.'
+    };
+    setDestinations([newPlace, ...destinations]);
+  };
+
+  // Logic ระบบค้นหา: ทำงานกลั่นกรองแบบ Real-time เช่นเดิม
+  const filteredDestinations = destinations.filter((item) =>
+    item.title.toLowerCase().includes(searchText.toLowerCase())
+  );
 
   return (
     <View style={styles.container}>
       
-      {/* 👤 Header ส่วนบน: ปุ่มย้อนกลับ, หัวข้อ, และปุ่มบวก */}
+      {/* 👤 Header ส่วนบน: จัดการปุ่มย้อนกลับให้คงที่ปลอดภัย */}
       <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.circularHeaderButton} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity 
+          style={styles.circularHeaderButton} 
+          onPress={() => router.replace('/(tabs)')} 
+          activeOpacity={0.7}
+        >
           <Ionicons name="chevron-back" size={22} color="#475569" />
         </TouchableOpacity>
         
         <Text style={styles.headerTitle}>เลือกจุดหมายปลายทาง</Text>
         
-        <TouchableOpacity style={styles.circularHeaderButton} activeOpacity={0.7}>
+        {/* ปุ่มบวกสำหรับเพิ่มพิกัดทางลัด */}
+        <TouchableOpacity 
+          style={styles.circularHeaderButton} 
+          activeOpacity={0.7}
+          onPress={handleAddNewDestination}
+        >
           <Ionicons name="add" size={22} color="#475569" />
         </TouchableOpacity>
       </View>
@@ -41,8 +71,19 @@ export default function DestinationPage() {
             placeholderTextColor="#94A3B8"
             value={searchText}
             onChangeText={setSearchText}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
           />
-          <TouchableOpacity style={styles.mapIconBtn} activeOpacity={0.6}>
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchText('')} style={{ marginRight: 8 }}>
+              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            style={styles.mapIconBtn} 
+            activeOpacity={0.6}
+            onPress={() => router.push('/map')}
+          >
             <Ionicons name="map-outline" size={20} color="#475569" />
           </TouchableOpacity>
         </View>
@@ -50,49 +91,78 @@ export default function DestinationPage() {
 
       {/* 📜 รายการจุดหมายปลายทาง (Scrollable List) */}
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {destinations.map((item) => (
-          <TouchableOpacity 
-            key={item.id} 
-            style={styles.destinationItemCard} 
-            activeOpacity={0.9}
-            onPress={() => router.push('/map')} // 🗺️ กดแล้วจะลิ้งก์ไปหน้าแผนที่ถัดไป (โฟลเดอร์ map ของพี่)
-          >
-            <View style={styles.cardInternalRow}>
-              
-              {/* ซีกซ้าย: ไอคอนรูปบ้านสีน้ำเงินเข้ม */}
-              <View style={styles.homeIconBlueBox}>
-                <Ionicons name="home" size={24} color="#FFF" />
-              </View>
-
-              {/* ซีกขวา: ข้อมูลรายละเอียดทั้งหมด */}
-              <View style={styles.destinationDetailContent}>
-                <View style={styles.titleAndArrowRow}>
-                  <Text style={styles.destinationTitleText}>{item.title}</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </View>
-                
-                {/* แถวข้อมูลสถิติย่อยด้านล่าง */}
-                <View style={styles.metaDataInfoRow}>
-                  <View style={styles.metaDataColumn}>
-                    <Text style={styles.metaLabelText}>วันที่</Text>
-                    <Text style={styles.metaValueText}>{item.date}</Text>
-                  </View>
-                  
-                  <View style={styles.metaDataColumn}>
-                    <Text style={styles.metaLabelText}>ระยะทาง</Text>
-                    <Text style={styles.metaValueText}>{item.distance}</Text>
-                  </View>
-                  
-                  <View style={styles.metaDataColumn}>
-                    <Text style={styles.metaLabelText}>เวลา</Text>
-                    <Text style={styles.metaValueText}>{item.time}</Text>
-                  </View>
-                </View>
-
-              </View>
+        {destinations.length === 0 ? (
+          // 🌟 กรณีที่ 1: หน้าจอคลีนบริสุทธิ์ ยังไม่มีข้อมูลใด ๆ ในเครื่องเลย
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="map-outline" size={36} color="#94A3B8" />
             </View>
-          </TouchableOpacity>
-        ))}
+            <Text style={styles.emptyMainText}>ยังไม่มีประวัติจุดหมายปลายทาง</Text>
+            <Text style={styles.emptySubText}>คุณสามารถค้นหาตำแหน่งด้านบน หรือกดปุ่มเครื่องหมายบวกเพื่อบันทึกสถานที่โปรดได้ครับ</Text>
+            
+            <TouchableOpacity 
+              style={styles.addFirstPlaceBtn}
+              activeOpacity={0.8}
+              onPress={handleAddNewDestination}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#FFF" />
+              <Text style={styles.addFirstPlaceText}>เพิ่มจุดหมายแรก</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filteredDestinations.length > 0 ? (
+          // กรณีที่ 2: มีข้อมูลประวัติการบันทึกอยู่ และแสดงผลการกรองค้นหาตามจริง
+          filteredDestinations.map((item) => (
+            <TouchableOpacity 
+              key={item.id} 
+              style={styles.destinationItemCard} 
+              activeOpacity={0.7}
+              onPress={() => router.push('/map')} 
+            >
+              <View style={styles.cardInternalRow}>
+                
+                <View style={styles.homeIconBlueBox}>
+                  <Ionicons 
+                    name={item.title.includes('บ้าน') ? "home" : "location-sharp"} 
+                    size={22} 
+                    color="#FFF" 
+                  />
+                </View>
+
+                <View style={styles.destinationDetailContent}>
+                  <View style={styles.titleAndArrowRow}>
+                    <Text style={styles.destinationTitleText}>{item.title}</Text>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </View>
+                  
+                  <View style={styles.metaDataInfoRow}>
+                    <View style={styles.metaDataColumn}>
+                      <Text style={styles.metaLabelText}>วันที่</Text>
+                      <Text style={styles.metaValueText}>{item.date}</Text>
+                    </View>
+                    
+                    <View style={styles.metaDataColumn}>
+                      <Text style={styles.metaLabelText}>ระยะทาง</Text>
+                      <Text style={styles.metaValueText}>{item.distance}</Text>
+                    </View>
+                    
+                    <View style={styles.metaDataColumn}>
+                      <Text style={styles.metaLabelText}>เวลา</Text>
+                      <Text style={styles.metaValueText}>{item.time}</Text>
+                    </View>
+                  </View>
+
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          // กรณีที่ 3: ผู้ใช้พิมพ์ค้นหาชื่อสถานที่อยู่ แต่ระบบค้นหาในอาร์เรย์แล้วไม่พบคำตรงกัน
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={44} color="#94A3B8" style={{ marginBottom: 10 }} />
+            <Text style={styles.emptyMainText}>ไม่พบจุดหมายปลายทางที่ค้นหา</Text>
+            <Text style={styles.emptySubText}>ลองตรวจสอบตัวอักษรหรือพิมพ์ใหม่อีกครั้งครับพี่</Text>
+          </View>
+        )}
       </ScrollView>
 
     </View>
@@ -102,7 +172,7 @@ export default function DestinationPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9', // พื้นหลังสีเทาอ่อน สบายตาอิงตาม Mockup
+    backgroundColor: '#F1F5F9', 
   },
   headerRow: {
     flexDirection: 'row',
@@ -119,7 +189,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
-    // ทำเงาขอบปุ่มกลมด้านบน
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -179,7 +248,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    // ทำมิติเงาซ้อนหลังการ์ดแต่ละใบให้ลอยนูนสวยงาม
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -194,7 +262,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#34577C', // สีฟ้าน้ำเงินสไตล์ไอคอนบ้านในรูปดีไซน์
+    backgroundColor: '#34577C', 
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -231,5 +299,51 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#475569',
     fontWeight: '600',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyMainText: {
+    fontSize: 15,
+    color: '#334155',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  emptySubText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  addFirstPlaceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#004368',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  addFirstPlaceText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

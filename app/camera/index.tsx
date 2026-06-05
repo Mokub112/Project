@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  Platform,
 } from "react-native";
 import Svg, { Path, Ellipse, Polyline } from "react-native-svg";
 import { useRouter } from "expo-router";
@@ -46,9 +47,21 @@ export default function FaceScanPage() {
     }
   }, [permission, status]);
 
-  function handleStart() {
-    localStorage.setItem('user_session', 'authenticated');
-    router.replace("/(tabs)");
+  // 🔐 ระบบบันทึก Session ข้อมูลความปลอดภัยระดับ Native
+  async function handleStart() {
+    try {
+      if (Platform.OS === 'web') {
+        localStorage.setItem('user_session', 'authenticated');
+      } else {
+        await SecureStore.setItemAsync('user_session', 'authenticated');
+      }
+      
+      // ✅ แก้ไขจุดนี้: มุ่งหน้าสู่แท็บหลักอย่างถูกต้อง
+      router.replace("/(tabs)");
+    } catch (error) {
+      console.error("Error saving secure session:", error);
+      router.replace("/(tabs)");
+    }
   }
 
   // กำลังโหลดสิทธิ์เข้าถึงกล้อง
@@ -243,6 +256,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2B5278",
     alignItems: "center",
     justifyContent: "center",
+    bottomMaring: 28,
     marginBottom: 28,
   },
   successTitle: {

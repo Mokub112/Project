@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase'; // 💡 อย่าลืมเช็กความถูกต้องของ Path ที่เชื่อมไปไฟล์ supabase นะครับ
+import { supabase } from '../../lib/supabase'; 
+import AsyncStorage from '@react-native-async-storage/async-storage'; // 🚀 นำเข้า AsyncStorage เพื่อใช้แทน localStorage
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +14,7 @@ export default function LoginPage() {
   // 🔐 ฟังก์ชันจัดการกดปุ่มล็อกอิน
   async function handleLogin() {
     if (!email || !password) {
-      Alert.alert('กรุณากรอกข้อมูล', 'โปรดกรอกอีเมลและรหัสผ่านให้ครบถ้วน');
+      Alert.alert('กรุณากรอกข้อมูล', 'โปรดกรอกอีเมลและรหัสผ่านให้ครบถ้วนครับพี่');
       return;
     }
 
@@ -32,16 +33,19 @@ export default function LoginPage() {
       }
 
       if (data?.user) {
-        // 🎯 2. จุดสำคัญ: บันทึกอีเมลและไอดีตัวจริงเก็บลงเครื่อง เพื่อส่งต่อให้หน้าแรก (Dashboard) นำไปแสดงผล
-        localStorage.setItem('user_email', data.user.email ?? '');
-        localStorage.setItem('user_id', data.user.id);
+        // 🎯 2. จุดแก้ไขสำคัญ: เปลี่ยนจาก localStorage เป็น AsyncStorage เพื่อบันทึกข้อมูลลงสมาร์ทโฟนได้จริง ไม่เกิดอาการแอปค้าง
+        await AsyncStorage.setItem('user_email', data.user.email ?? '');
+        await AsyncStorage.setItem('user_id', data.user.id);
         
-        // 🚀 3. ย้ายหน้าผ่านด่านไปยังลำดับถัดไป (เช่น หน้าขอสิทธิ์ หรือหน้ากล้องสแกนหน้า)
+        // บันทึกสถานะการยืนยันสิทธิ์เบื้องต้นไว้ด้วย เพื่อป้องกันระบบความปลอดภัยดีดกลับหน้าล็อกอิน
+        await AsyncStorage.setItem('user_session', 'authenticated');
+        
+        // 🚀 3. ย้ายหน้าไปยังหน้าขอสิทธิ์ตรวจจับหรือขั้นตอนถัดไปชั่วคราว
         router.replace('/permissions');
       }
     } catch (err) {
       console.error(err);
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อกับระบบได้');
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อกับระบบฐานข้อมูลได้');
     } finally {
       setLoading(false);
     }
@@ -53,7 +57,10 @@ export default function LoginPage() {
         {/* ส่วนหัวของหน้า Login */}
         <View style={styles.tabHeader}>
           <Text style={[styles.tabText, styles.activeTab]}>Sign in</Text>
-          <TouchableOpacity onPress={() => router.push('/signup')}>
+          <TouchableOpacity 
+            onPress={() => router.replace('/signup')} // 👈 ใช้ replace แทน push เพื่อทำลายประวัติเก่า ป้องกันวนลูปหน้าระบบ
+            activeOpacity={0.6}
+          >
             <Text style={styles.tabText}>Sign up</Text>
           </TouchableOpacity>
         </View>
@@ -90,22 +97,29 @@ export default function LoginPage() {
         </View>
 
         {/* ลิงก์ลืมรหัสผ่าน */}
-        <TouchableOpacity style={styles.forgotContainer}>
+        <TouchableOpacity style={styles.forgotContainer} activeOpacity={0.6}>
           <Text style={styles.forgotText}>Forgot password?</Text>
         </TouchableOpacity>
 
-        {/* 🔘 ปุ่มกดล็อกอิน */}
+        {/* 🔘 ปุ่มกดล็อกอิน และ ปุ่มโซเชียล */}
         <View style={styles.buttonRow}>
           <View style={styles.socialIcons}>
-            <TouchableOpacity style={styles.socialButton}><Ionicons name="logo-google" size={20} color="#EA4335" /></TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}><Ionicons name="logo-facebook" size={20} color="#1877F2" /></TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}><Ionicons name="logo-apple" size={20} color="#000000" /></TouchableOpacity>
+            <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
+              <Ionicons name="logo-google" size={20} color="#EA4335" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
+              <Ionicons name="logo-facebook" size={20} color="#1877F2" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
+              <Ionicons name="logo-apple" size={20} color="#000000" />
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity 
             style={styles.loginButton} 
             onPress={handleLogin}
             disabled={loading}
+            activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color="#FFF" />

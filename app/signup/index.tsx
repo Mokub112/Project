@@ -45,8 +45,16 @@ export default function SignUpPage() {
         return;
       }
 
-      Alert.alert('สำเร็จ 🎉', 'ระบบได้ส่งอีเมลยืนยันตัวตนไปให้ท่านแล้ว!');
-      router.replace('/login');
+      // 🛡️ ป้องกันสิทธิ์ลักไก่: บังคับเคลียร์ Session อัตโนมัติจากระบบ Supabase ทันทีหลังสมัคร
+      await supabase.auth.signOut();
+
+      Alert.alert('สำเร็จ 🎉', 'ระบบได้ส่งอีเมลยืนยันตัวตนไปให้ท่านแล้ว! โปรดยืนยันอีเมลก่อนเข้าสู่ระบบครับ', [
+        {
+          text: 'ตกลง',
+          onPress: () => router.replace('/login') // เคลียร์หน้า Register ทิ้งและพุ่งไปหน้าล็อกอินอย่างปลอดภัย
+        }
+      ]);
+
     } catch (err) {
       Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อระบบได้');
     } finally {
@@ -60,7 +68,7 @@ export default function SignUpPage() {
         
         {/* 📑 Tab สลับหน้าสไตล์เดียวกับหน้า Sign in เป๊ะๆ */}
         <View style={styles.tabHeader}>
-          <TouchableOpacity onPress={() => router.push('/login')} activeOpacity={0.6}>
+          <TouchableOpacity onPress={() => router.replace('/login')} activeOpacity={0.6}>
             <Text style={styles.tabText}>Sign in</Text>
           </TouchableOpacity>
           <View>
@@ -171,11 +179,10 @@ export default function SignUpPage() {
   );
 }
 
-// 🎨 สไตล์แบบย่อขนาดความสูงกระชับ (ป้องกันอาการปุ่มตกขอบล่าง)
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#F8FAFC', // สีสว่างคุมโทนสะอาดตาแบบหน้าล็อกอิน
+    backgroundColor: '#F8FAFC', 
     justifyContent: 'center', 
     alignItems: 'center', 
     padding: 20 
@@ -186,8 +193,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', 
     borderRadius: 24, 
     paddingHorizontal: 28,
-    paddingTop: 24,        // 🚀 ยุบขอบบนเข้าเล็กน้อย
-    paddingBottom: 24,     // 🚀 ยุบขอบล่างเข้าเล็กน้อย
+    paddingTop: 24,        
+    paddingBottom: 24,     
     shadowColor: '#000', 
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04, 
@@ -197,7 +204,7 @@ const styles = StyleSheet.create({
   tabHeader: { 
     flexDirection: 'row', 
     gap: 20, 
-    marginBottom: 16       // 🚀 ลดระยะห่างใต้แถบแท็บสลับหน้า
+    marginBottom: 16       
   },
   tabText: { 
     fontSize: 16, 
@@ -211,7 +218,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4 
   },
   title: { 
-    fontSize: 26,          // 🚀 ปรับตัวใหญ่ประจำหน้าลงมาเล็กน้อย
+    fontSize: 26,          
     fontWeight: '700', 
     color: '#0F172A', 
     marginBottom: 4 
@@ -219,10 +226,10 @@ const styles = StyleSheet.create({
   subtitle: { 
     fontSize: 13, 
     color: '#64748B', 
-    marginBottom: 16       // 🚀 ปรับระยะห่างหลังคำอธิบายให้น้อยลง
+    marginBottom: 16       
   },
   inputContainer: { 
-    marginBottom: 12       // 🚀 ปรับระยะช่องไฟระหว่างช่องกรอกให้ขยับชิดกันพองาม
+    marginBottom: 12       
   },
   inputLabel: { 
     fontSize: 12, 
@@ -232,7 +239,7 @@ const styles = StyleSheet.create({
   },
   input: { 
     width: '100%', 
-    height: 42,            // 🚀 เปลี่ยนความสูงช่องกรอกจาก 48 เหลือ 42 เพื่อดึงพื้นที่คืนให้ปุ่มด้านล่าง
+    height: 42,            
     backgroundColor: '#F1F5F9', 
     borderRadius: 10, 
     paddingHorizontal: 14, 
@@ -243,7 +250,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center',
-    marginTop: 8           // 🚀 ขยับแถวปุ่มขึ้นมาพอดีคำ
+    marginTop: 8           
   },
   socialIcons: { 
     flexDirection: 'row', 
@@ -262,7 +269,7 @@ const styles = StyleSheet.create({
     width: 56, 
     height: 56, 
     borderRadius: 28, 
-    backgroundColor: '#004368', // สีน้ำเงินเข้มตามดีไซน์หลัก
+    backgroundColor: '#004368', 
     justifyContent: 'center', 
     alignItems: 'center',
     shadowColor: '#004368',

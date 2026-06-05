@@ -1,28 +1,56 @@
+import React, { useEffect, useState } from 'react';
 import { Tabs, useRouter, usePathname } from 'expo-router';
-import { StyleSheet, View, Text, Platform, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // 🚀 นำเข้าเพื่อตรวจสถานะล็อกอินก่อนยอมให้แสดงหน้าเมนูหลัก
 
 export default function TabLayout() {
   const router = useRouter();
-  
-  // 💡 เปลี่ยนมาใช้ usePathname เช็กเส้นทางจาก URL ตรงๆ แม่นยำที่สุดในสามโลกครับพี่
   const pathname = usePathname();
+  const [isReady, setIsReady] = useState(false);
 
-  // 🎯 ลิสต์รายชื่อแท็บและแมพเส้นทางให้ตรงตามตำแหน่งไฟล์จริงของพี่
+  // 🛡️ ระบบ Guard ป้องกันลักไก่: ตรวจสอบสิทธิ์ตั้งแต่ก้าวแรกที่เข้าสู่โซนหน้าหลัก
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const userSession = await AsyncStorage.getItem('user_session');
+        // ⚠️ หากพบว่าไม่มีสถานะเซสชัน หรือล็อกเอาต์ไปแล้ว ให้ดีดกลับไปหน้าล็อกอินทันที ไม่ยอมให้จอดค้างที่หน้าหลัก
+        if (!userSession || userSession !== 'authenticated') {
+          router.replace('/login');
+        } else {
+          setIsReady(true); // ปลดล็อกให้แสดงผล UI เมนูด้านล่างอย่างปลอดภัย
+        }
+      } catch (err) {
+        router.replace('/login');
+      }
+    }
+    checkAuth();
+  }, [pathname]); // 💡 คอยตรวจจับทุกครั้งที่มีการเปลี่ยนหน้าพยายามย้าย Route
+
+  // 🎯 ปรับปรุงเส้นทาง (Route) ให้สอดคล้องกับกลุ่มโฟลเดอร์ (tabs) เพื่อให้ระบบจดจำโฟกัสแม่นยำ
   const tabs = [
-    { id: 'index', route: '/', label: 'หน้าหลัก', activeIcon: 'home' as const, inactiveIcon: 'home-outline' as const },
-    { id: 'report', route: '/report', label: 'รายงาน', activeIcon: 'document-text' as const, inactiveIcon: 'document-text-outline' as const },
-    { id: 'video', route: '/video', label: 'วิดีโอ', activeIcon: 'play' as const, inactiveIcon: 'play-outline' as const },
-    { id: 'menu', route: '/menu', label: 'เมนู', activeIcon: 'grid' as const, inactiveIcon: 'grid-outline' as const },
+    { id: 'index', route: '/(tabs)', label: 'หน้าหลัก', activeIcon: 'home' as const, inactiveIcon: 'home-outline' as const },
+    { id: 'report', route: '/(tabs)/report', label: 'รายงาน', activeIcon: 'document-text' as const, inactiveIcon: 'document-text-outline' as const },
+    { id: 'video', route: '/(tabs)/video', label: 'วิดีโอ', activeIcon: 'play' as const, inactiveIcon: 'play-outline' as const },
+    { id: 'menu', route: '/(tabs)/menu', label: 'เมนู', activeIcon: 'grid' as const, inactiveIcon: 'grid-outline' as const },
   ];
+
+  // ระหว่างที่ระบบ Guard กำลังคุ้ยหา Token ในเครื่อง ให้ขึ้น Loading สวยๆ บังหน้าจอหลักไว้ก่อน
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+        <ActivityIndicator size="large" color="#004368" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.masterContainer}>
-      {/* 1. คอนโทรลเลอร์คุมหน้าจอหลักของ Expo Router (ซ่อนแถบเก่าทิ้ง 100%) */}
+      {/* 1. คอนโทรลเลอร์คุมหน้าจอหลักของ Expo Router */}
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { display: 'none' }, 
+          tabBarStyle: { display: 'none' }, // ซ่อนแถบดีไซน์ดั้งเดิมของระบบ
         }}
       >
         <Tabs.Screen name="index" />
@@ -31,22 +59,20 @@ export default function TabLayout() {
         <Tabs.Screen name="menu" />
       </Tabs>
 
-      {/* 🌟 2. แผงแคปซูลลอย Custom ตัวจบ สัดส่วนเป๊ะ ไม่โดนบีบเบี้ยว */}
+      {/* 🌟 2. แผงแคปซูลลอย Custom ตัวจบ */}
       <View style={styles.floatingTabBar}>
         {tabs.map((tab) => {
-          // 💡 เช็กสถานะโฟกัสตรงๆ จากเส้นทาง Pathname ชัวร์ที่สุด ไม่มีเด้งกลับมั่วซั่ว
-          const isFocused = pathname === tab.route;
+          // 💡 เช็กสถานะโฟกัสผ่านรูปแบบ Absolute Group Route เพื่อป้องกันอาการปุ่มเบิ้ลหรือไอคอนไม่สว่าง
+          const isFocused = pathname === tab.route || (tab.route === '/(tabs)' && pathname === '/');
 
           return (
             <TouchableOpacity
               key={tab.id}
-              // ใช้ router.navigate เพื่อสลับหน้าภายในชุด Tabs อย่างนุ่มนวล
               onPress={() => router.navigate(tab.route as any)}
               activeOpacity={0.85}
               style={styles.tabButton}
             >
               {isFocused ? (
-                // ✨ ตอนเลือกแท็บ: ขยายร่างเป็นแคปซูลสีฟ้าพาสเทลสวยงาม ตัวหนังสือไม่แหว่ง
                 <View style={styles.activeCapsule}>
                   <View style={styles.activeIconCircle}>
                     <Ionicons name={tab.activeIcon} size={16} color="#FFFFFF" />
@@ -56,7 +82,6 @@ export default function TabLayout() {
                   </Text>
                 </View>
               ) : (
-                // 💤 ตอนไม่ได้เลือก: โชว์ไอคอนเส้นขอบเทาเรียบๆ จัดวางกึ่งกลางช่องพอดี
                 <Ionicons name={tab.inactiveIcon} size={24} color="#64748B" />
               )}
             </TouchableOpacity>
@@ -67,7 +92,6 @@ export default function TabLayout() {
   );
 }
 
-// 🎨 สไตล์แบบลอยพรีเมียม สัดส่วนเป๊ะไม่มีการดึงกันพัง
 const styles = StyleSheet.create({
   masterContainer: {
     flex: 1,
@@ -81,12 +105,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 40,
     height: 76,
-    
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -102,20 +124,20 @@ const styles = StyleSheet.create({
   activeCapsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#A2B9CE', // สีฟ้าพาสเทลตามดีไซน์เป๊ะๆ
+    backgroundColor: '#A2B9CE', 
     borderRadius: 24,
     paddingVertical: 6,
     paddingLeft: 6,
     paddingRight: 16,
     gap: 8,
-    minWidth: 102, // กันฟอนต์โดนบีบแหว่ง
+    minWidth: 102, 
     justifyContent: 'center',
   },
   activeIconCircle: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#528AAE', // วงกลมน้ำเงินฟ้าเข้มล้อมไอคอนด้านใน
+    backgroundColor: '#528AAE', 
     justifyContent: 'center',
     alignItems: 'center',
   },

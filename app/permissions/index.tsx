@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // 🚀 นำเข้า AsyncStorage เพื่อเคลียร์สิทธิ์ความปลอดภัยให้ตรงกับหน้า Login
 
 const { width } = Dimensions.get("window");
 
@@ -66,22 +67,38 @@ const permissions = [
 export default function PermissionsPage() {
   const router = useRouter();
 
-  function handleAllow() {
-    router.replace("/camera");
+  // 🟢 ฟังก์ชันเมื่อผู้ใช้กดอนุญาตสิทธิ์
+  async function handleAllow() {
+    try {
+      // 🛡️ ปั๊ม Session ความปลอดภัยลงตัวเครื่อง เพื่อแจ้งให้โครงสร้างแอปหลักรู้ว่าผู้ใช้มีสิทธิ์เข้าถึงแล้ว ไม่ดีดกลับหน้า login
+      await AsyncStorage.setItem("user_session", "authenticated");
+      router.replace("/camera"); // มุ่งหน้าสู่โฟลเดอร์เปิดกล้องสแกนใบหน้า
+    } catch (error) {
+      console.error("AsyncStorage Error: ", error);
+      router.replace("/camera");
+    }
   }
 
-  function handleDeny() {
-    router.replace("/login");
+  // 🔴 ฟังก์ชันเมื่อผู้ใช้กดปฏิเสธสิทธิ์
+  async function handleDeny() {
+    try {
+      // เคลียร์ค่า Session ออกเพื่อความปลอดภัยเมื่อถูกปฏิเสธเข้าใช้งานอุปกรณ์
+      await AsyncStorage.removeItem("user_session");
+      router.replace("/login");
+    } catch (error) {
+      router.replace("/login");
+    }
   }
 
   return (
     <ScrollView 
       contentContainerStyle={styles.scrollContainer} 
       style={styles.mainContainer}
+      showsVerticalScrollIndicator={false}
     >
       <View style={styles.cardContainer}>
 
-        {/* บล็อกจัดวางโลโก้ผสมผสานด้านบน (แก้ไขจาก <div> เป็น <View>) */}
+        {/* บล็อกจัดวางโลโก้ผสมผสานด้านบน */}
         <View style={styles.logoWrapper}>
           <View style={styles.logoCircle}>
             {/* กล้องตรงกลาง */}
@@ -158,7 +175,7 @@ export default function PermissionsPage() {
 }
 
 // ============================================================
-// STYLESHEET (แก้ปัญหาการแสดงผลพังบน Web)
+// STYLESHEET 
 // ============================================================
 
 const styles = StyleSheet.create({

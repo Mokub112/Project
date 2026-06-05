@@ -1,59 +1,41 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-import { useColorScheme } from 'react-native';
+import { SplashScreen, Slot } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { View, ActivityIndicator } from 'react-native';
 
-export {
-  ErrorBoundary,
-} from 'expo-router';
-
-// 💡 จุดที่ 1: แก้จาก 'login' เป็น 'login/index'
-export const unstable_settings = {
-  initialRouteName: 'login/index', 
-};
-
+// สั่งคงหน้า Splash Screen ไว้ก่อนจนกว่าฟอนต์จะโหลดเสร็จ
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  // โหลดฟอนต์ระบบตัวเริ่มต้น
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
+  // ตรวจสอบสถานะการดาวน์โหลดฟอนต์
   useEffect(() => {
-    if (loaded) {
+    if (loaded || error) {
       SplashScreen.hideAsync();
+      setIsAuthChecked(true); // ปลดล็อกหน้าโหลดดิ้งเมื่อระบบพร้อม
     }
-  }, [loaded]);
+  }, [loaded, error]);
 
-  if (!loaded) {
-    return null;
+  // ระหว่างที่ฟอนต์ยังโหลดไม่เสร็จ ให้แสดงหน้าหมุนโหลดดิ้งคลีน ๆ รอไว้ก่อน
+  if (!loaded || !isAuthChecked) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F5F9' }}>
+        <ActivityIndicator size="large" color="#004368" />
+      </View>
+    );
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
+  // เมื่อระบบสัมผัสและฟอนต์พร้อม เรนเดอร์โครงสร้างแอปพลิเคชันหลัก
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        {/* 💡 จุดที่ 2: แก้ตรง name จาก "login" เป็น "login/index" */}
-        <Stack.Screen name="login/index" options={{ headerShown: false }} />
-        <Stack.Screen name="permissions/index" options={{ headerShown: false }} />
-        <Stack.Screen name="camera/index" options={{ headerShown: false }} />
-        
-        {/* กลุ่มหน้าหลักเมื่อสแกนผ่านหมดแล้ว */}
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Slot />
+    </GestureHandlerRootView>
   );
 }

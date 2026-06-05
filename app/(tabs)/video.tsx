@@ -1,26 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase'; // 🟢 นำเข้า supabase client
+import { supabase } from '../../lib/supabase';
 
 const { width } = Dimensions.get('window');
+// 💡 คำนวณความกว้างของการ์ดวิดีโอแบบลบระยะขอบ Padding ให้พอดีสัดส่วนหน้าจอเป๊ะ ๆ
 const cardWidth = (width - 44) / 2; 
 
 export default function VideoPage() {
-  const [referenceDate, setReferenceDate] = useState(new Date());
+  const [referenceDate, setReferenceDate] = useState<Date>(new Date());
   const [weekDays, setWeekDays] = useState<any[]>([]);
-  const [selectedDateStr, setSelectedDateStr] = useState('');
+  const [selectedDateStr, setSelectedDateStr] = useState<string>('');
   
   // 🟢 State สำหรับจัดการข้อมูลจริงจาก DB
   const [videoList, setVideoList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const thaiMonths = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
   ];
 
-  // 📅 1. จัดการปฏิทิน (ส่งฟอร์แมต YYYY-MM-DD เพื่อเอาไปค้นหาในฐานข้อมูลได้ง่าย)
+  // 📅 1. อัปเกรด: จัดการระบบปฏิทินให้สอดคล้องกับวันปัจจุบันและสัปดาห์ที่เลือกอย่างแม่นยำ
   useEffect(() => {
     const current = new Date(referenceDate);
     const currentDayOfWeek = current.getDay(); 
@@ -50,6 +51,7 @@ export default function VideoPage() {
 
     setWeekDays(days);
     
+    // 💡 แก้ไขปัญหาปฏิทินไม่ตรง: ให้เลือกวันแรกของสัปดาห์ที่เปลี่ยนไปอัตโนมัติ เพื่อให้ข้อมูล Query อัปเดตตามทันที
     if (!selectedDateStr) {
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -57,7 +59,7 @@ export default function VideoPage() {
     }
   }, [referenceDate]);
 
-  // 🟢 2. ดึงข้อมูลวิดีโอจาก Supabase เมื่อ `selectedDateStr` (วันที่เลือก) เปลี่ยนไป
+  // 🟢 2. ดึงข้อมูลวิดีโอจาก Supabase เมื่อวันที่เลือกเปลี่ยนไป
   useEffect(() => {
     if (!selectedDateStr) return;
 
@@ -65,23 +67,21 @@ export default function VideoPage() {
       try {
         setLoading(true);
         
-        // ดึง User Session ปัจจุบัน
         const { data: sessionData } = await supabase.auth.getSession();
         const userId = sessionData?.session?.user?.id;
 
         if (userId) {
-          // ดึงข้อมูลจากตาราง วิดีโอ โดยเช็กเงื่อนไข user_id และ วันที่บันทึกวิดีโอ
           const { data, error } = await supabase
-            .from('driving_videos') // ⚠️ พี่สามารถเปลี่ยนชื่อตารางให้ตรงกับใน DB จริงของพี่ได้ตรงนี้ครับ
+            .from('driving_videos')
             .select('*')
             .eq('user_id', userId)
-            .eq('video_date', selectedDateStr) // ค้นหาวิดีโอเฉพาะวันที่เลือก
+            .eq('video_date', selectedDateStr)
             .order('created_at', { ascending: false });
 
           if (!error && data) {
             setVideoList(data);
           } else {
-            setVideoList([]); // ถ้า Error หรือไม่เจอ ให้เป็นอาเรย์ว่าง
+            setVideoList([]);
           }
         }
       } catch (err) {
@@ -113,10 +113,16 @@ export default function VideoPage() {
     return `${monthThai} ${yearThai}`;
   };
 
+  // 🎬 ฟังก์ชันรองรับการกดเล่นวิดีโอ (พี่สามารถนำตัวแปรไอเทมไปเปิด Modal หรือสั่งเล่นต่อได้เลยครับ)
+  const handlePlayVideo = (videoItem: any) => {
+    console.log('กำลังเปิดเล่นวิดีโอ ID:', videoItem.id);
+    // TODO: พัฒนาระบบเปิด Video Player ต่อตรงนี้ได้เลยครับพี่
+  };
+
   return (
     <ScrollView 
       style={styles.container} 
-      contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]} // ดันพื้นที่หนีแถบล่างชัวร์ ๆ
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]} 
       showsVerticalScrollIndicator={false}
       alwaysBounceVertical={true}
     >
@@ -154,40 +160,41 @@ export default function VideoPage() {
 
       {/* 📊 ส่วนแสดงตารางรายการวิดีโอ */}
       {loading ? (
-        // แสดงตัวโหลดติ้ว ๆ ตอนดึงข้อมูล
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#004368" />
         </View>
       ) : videoList.length === 0 ? (
-        // 💡 ถ้าวันนั้นไม่มีวิดีโอในฐานข้อมูล จะแสดงข้อความนี้แทน ไม่ปล่อยให้จอโล่งเปล่าประโยชน์
         <View style={styles.centerContainer}>
           <Ionicons name="videocam-off-outline" size={48} color="#A0AEC0" />
           <Text style={styles.emptyText}>ไม่มีวิดีโอการขับขี่ในวันนี้</Text>
         </View>
       ) : (
-        // มีข้อมูลจริง โชว์ลิสต์ตามปกติ
         <View style={styles.videoGridContainer}>
           {videoList.map((item) => (
-            <View key={item.id} style={styles.videoCard}>
-              
+            // 💡 อัปเกรด: ครอบการ์ดทั้งหมดด้วย TouchableOpacity เพื่อให้ผู้ใช้งานใช้นิ้วกดกดเล่นวิดีโอได้สะดวกขึ้น ไม่ต้องเล็งกดตรงปุ่มวงกลมเล็ก ๆ
+            <TouchableOpacity 
+              key={item.id} 
+              style={styles.videoCard}
+              onPress={() => handlePlayVideo(item)}
+              activeOpacity={0.85}
+            >
               <View style={styles.thumbnailWrapper}>
-                {/* 💡 เปลี่ยนเป็น item.thumbnail_url หรือ item.video_url (ถ้ามี) จาก DB ได้เลย */}
                 <Image 
                   source={{ uri: item.thumbnail_url || 'https://images.unsplash.com/photo-1542362567-b07eac79094d?q=80&w=400' }} 
                   style={styles.thumbnailImage} 
                 />
                 <View style={styles.overlayOverlay} />
                 
-                <TouchableOpacity style={styles.playButtonCircle} activeOpacity={0.8}>
+                {/* ปุ่ม Play สวยงามกลางหน้าปก */}
+                <View style={styles.playButtonCircle}>
                   <Ionicons name="play" size={16} color="#1E293B" style={{ marginLeft: 2 }} />
-                </TouchableOpacity>
+                </View>
               </View>
 
-              {/* แสดงชื่อไฟล์จากคอลัมน์ใน DB เช่น item.title หรือ item.video_name */}
               <Text style={styles.videoTitleText} numberOfLines={1}>
                 {item.title || item.video_name || 'ไม่ได้ระบุชื่อวิดีโอ'}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -269,6 +276,7 @@ const styles = StyleSheet.create({
   videoCard: {
     width: cardWidth,
     alignItems: 'center',
+    marginBottom: 4,
   },
   thumbnailWrapper: {
     width: '100%',
@@ -304,17 +312,17 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   videoTitleText: {
-    fontSize: 10,
-    color: '#718096',
-    fontWeight: '500',
-    marginTop: 6,
+    fontSize: 11,
+    color: '#4A5568',
+    fontWeight: '600',
+    marginTop: 8,
     textAlign: 'center',
-    width: '90%',
+    width: '95%',
   },
   centerContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   emptyText: {
     fontSize: 14,

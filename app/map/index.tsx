@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, Image, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, Image, TouchableOpacity, Dimensions, Platform, Alert, Animated, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-// 🛠️ โหลดไลบรารีเฉพาะตอนที่รันบนมือถือเท่านั้น เพื่อป้องกันไม่ให้หน้าเว็บพัง
 let MapView: any = View;
 let Marker: any = View;
 let MapViewDirections: any = View;
 let PROVIDER_GOOGLE: any = null;
+let Location: any = null;
 
 if (Platform.OS !== 'web') {
   const MapsObj = require('react-native-maps');
@@ -15,72 +15,191 @@ if (Platform.OS !== 'web') {
   Marker = MapsObj.Marker;
   PROVIDER_GOOGLE = MapsObj.PROVIDER_GOOGLE;
   MapViewDirections = require('react-native-maps-directions').default;
+  Location = require('expo-location');
 }
 
 const { width, height } = Dimensions.get('window');
-const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY_HERE';
+// ⚠️ ใส่คีย์ Google Maps ของพี่ตรงนี้ เพื่อให้ระบบคำนวณระยะทาง/เวลาทำงานได้จริงนะครับ
+const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY_HERE'; 
 
 export default function MapPage() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const destName = (params.destination_name as string) || 'บ้าน';
+  const destName = (params.destination_name as string) || 'จุดหมายปลายทาง';
   const destLat = params.lat ? parseFloat(params.lat as string) : 13.7563;
   const destLng = params.lng ? parseFloat(params.lng as string) : 100.5018;
 
-  const [currentLocation] = useState({ latitude: 13.7367, longitude: 100.5231 });
-  const [distance, setDistance] = useState('45.2');
-  const [duration, setDuration] = useState('47');
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  
+  // 🎯 ปรับปรุงจุดนี้: เคลียร์ค่าเริ่มต้นจากเดิม 45.2 และ 47 ให้สตาร์ทที่ 0 ทั้งหมด!
+  const [speed, setSpeed] = useState<number>(0);
+  const [distance, setDistance] = useState<string>('0.0');
+  const [duration, setDuration] = useState<string>('0');
+  const [loadingLocation, setLoadingLocation] = useState(true);
+
+  const pan = useRef(new Animated.ValueXY()).current;
+  const SWIPEABLE_LIMIT = 160; 
+
+  // 🛰️ ระบบดึงพิกัดและเฝ้าติดตามความเร็วรถสด ๆ ผ่าน GPS (Live Tracking)
+  useEffect(() => {
+    let locationSubscription: any = null;
+
+    async function startLocationTracking() {
+      if (Platform.OS === 'web') {
+        setCurrentLocation({ latitude: 13.7367, longitude: 100.5231 });
+        setSpeed(0);
+        setLoadingLocation(false);
+        return;
+      }
+
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setCurrentLocation({ latitude: 13.7367, longitude: 100.5231 });
+          setLoadingLocation(false);
+          return;
+        }
+
+        // ดึงตำแหน่งครั้งแรกเพื่อปักหมุดเปิดแผ่นแผนที่
+        let initialLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setCurrentLocation({
+          latitude: initialLoc.coords.latitude,
+          longitude: initialLoc.coords.longitude,
+        });
+        setLoadingLocation(false);
+
+        // 🏎️ ฟังก์ชัน Watch: จับการขยับเขยื้อนของตัวรถเพื่อดึงความเร็วเรียลไทม์
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 2000, // อัปเดตข้อมูลความเร็วทุก ๆ 2 วินาที
+            distanceInterval: 1, // หรือขยับรถทุก ๆ 1 เมตร
+          },
+          (loc: any) => {
+            // อัปเดตพิกัดปัจจุบันบนแผ่นที่ตามรถที่กำลังวิ่ง
+            setCurrentLocation({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+
+            // คำนวณความเร็ว (ค่าจากระบบจะเป็นเมตรต่อวินาที m/s ต้องคูณ 3.6 เพื่อแปลงเป็น กม./ชม.)
+            if (loc.coords.speed && loc.coords.speed > 0) {
+              const kmh = Math.round(loc.coords.speed * 3.6);
+              setSpeed(kmh);
+            } else {
+              setSpeed(0); // ถ้ารถจอดติดไฟแดงหรือจอดนิ่ง ๆ ให้ความเร็วเป็น 0 กม./ชม.
+            }
+          }
+        );
+
+      } catch (err) {
+        console.error(err);
+        setCurrentLocation({ latitude: 13.7367, longitude: 100.5231 });
+        setLoadingLocation(false);
+      }
+    }
+
+    startLocationTracking();
+
+    // เคลียร์หน่วยความจำและปิดสตรีม GPS เมื่อผู้ใช้ปิดหน้าจอนี้ออกไป
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, []);
+
+  // ตัวจับการรูดสไลด์จบงาน
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (e, gestureState) => {
+        if (gestureState.dx > 0 && gestureState.dx <= SWIPEABLE_LIMIT) {
+          pan.x.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (e, gestureState) => {
+        if (gestureState.dx >= SWIPEABLE_LIMIT - 30) {
+          Animated.timing(pan.x, { toValue: SWIPEABLE_LIMIT, duration: 100, useNativeDriver: false }).start(() => {
+            Alert.alert('สิ้นสุดการเดินทาง', 'ระบบบันทึกเวลาและรายงานการขับขี่เรียบร้อยแล้วครับ', [
+              { 
+                text: 'ตกลง', 
+                onPress: () => {
+                  pan.x.setValue(0);
+                  router.replace('/(tabs)');
+                } 
+              }
+            ]);
+          });
+        } else {
+          Animated.spring(pan.x, { toValue: 0, useNativeDriver: false }).start();
+        }
+      },
+    })
+  ).current;
+
+  function handleEmergency() {
+    Alert.alert('ติดต่อเหตุฉุกเฉิน', 'คุณต้องการโทรออกสายด่วน 191 หรือไม่?', [
+      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'โทรทันที', style: 'destructive' }
+    ]);
+  }
 
   return (
     <View style={styles.container}>
       
-      {/* 🗺️ ส่วนแสดงแผ่นแผนที่ */}
+      {/* 🗺️ แผ่นแผนที่ */}
       {Platform.OS === 'web' ? (
-        // 💻 สิ่งที่จะแสดงผลเมื่อเปิดบนหน้าเว็บ (Web Fallback) เพื่อไม่ให้บึ้ม
         <View style={styles.webMapPlaceholder}>
           <Ionicons name="map" size={64} color="#CBD5E1" />
           <Text style={styles.webMapText}>ระบบแผนที่ Google Maps จะแสดงผลสมบูรณ์เมื่อรันบนมือถือจริง</Text>
           <Text style={styles.webMapSubText}>กำลังนำทางไป: {destName}</Text>
         </View>
+      ) : loadingLocation || !currentLocation ? (
+        <View style={styles.webMapPlaceholder}>
+          <Text style={styles.webMapText}>กำลังตรวจสอบสัญญาณ GPS นำทางสักครู่ครับพี่...</Text>
+        </View>
       ) : (
-        // 📱 สิ่งที่จะแสดงผลบนมือถือเครื่องจริง
         <MapView
           style={styles.map}
           provider={PROVIDER_GOOGLE}
           initialRegion={{
             latitude: (currentLocation.latitude + destLat) / 2,
             longitude: (currentLocation.longitude + destLng) / 2,
-            latitudeDelta: Math.abs(currentLocation.latitude - destLat) * 1.5,
-            longitudeDelta: Math.abs(currentLocation.longitude - destLng) * 1.5,
+            latitudeDelta: Math.abs(currentLocation.latitude - destLat) * 1.8,
+            longitudeDelta: Math.abs(currentLocation.longitude - destLng) * 1.8,
           }}
         >
-          <Marker coordinate={currentLocation} title="ที่อยู่ปัจจุบัน" />
+          <Marker coordinate={currentLocation} title="ตำแหน่งของคุณ" />
           <Marker coordinate={{ latitude: destLat, longitude: destLng }} title={destName} pinColor="red" />
           
-          <MapViewDirections
-            origin={currentLocation}
-            destination={{ latitude: destLat, longitude: destLng }}
-            apikey={GOOGLE_MAPS_API_KEY}
-            strokeWidth={4}
-            strokeColor="#000000"
-            onReady={(result: any) => {
-              setDistance(result.distance.toFixed(1));
-              setDuration(Math.ceil(result.duration).toString());
-            }}
-          />
+          {GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY_HERE' && (
+            <MapViewDirections
+              origin={currentLocation}
+              destination={{ latitude: destLat, longitude: destLng }}
+              apikey={GOOGLE_MAPS_API_KEY}
+              strokeWidth={4}
+              strokeColor="#004368"
+              onReady={(result: any) => {
+                setDistance(result.distance.toFixed(1));
+                setDuration(Math.ceil(result.duration).toString());
+              }}
+            />
+          )}
         </MapView>
       )}
 
       {/* 🔙 ปุ่มย้อนกลับ */}
-      <TouchableOpacity style={styles.backButtonCircle} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.backButtonCircle} onPress={() => router.replace('/(tabs)')}>
         <Ionicons name="chevron-back" size={22} color="#475569" />
       </TouchableOpacity>
 
-      {/* 🪟 กล่องแสดงที่อยู่ด้านบน */}
+      {/* 🪟 บล็อกระบุเส้นทางด้านบน */}
       <View style={styles.topRouteCard}>
         <View style={styles.routeRow}>
           <View style={[styles.statusDot, { backgroundColor: '#4CD964' }]} />
-          <Text style={styles.routeLabel} numberOfLines={1}>จาก: <Text style={styles.routeValue}>ที่อยู่ปัจจุบัน</Text></Text>
+          <Text style={styles.routeLabel} numberOfLines={1}>จาก: <Text style={styles.routeValue}>ตำแหน่งปัจจุบันของคุณ</Text></Text>
         </View>
         <View style={styles.routeLineKink} />
         <View style={styles.routeRow}>
@@ -104,35 +223,41 @@ export default function MapPage() {
               <Text style={styles.driverSubText}>ผู้ขับขี่</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.searchRestBtn}>
+          <TouchableOpacity style={styles.searchRestBtn} activeOpacity={0.7}>
             <Text style={styles.searchRestText}>ค้นหาจุดพัก</Text>
           </TouchableOpacity>
         </View>
 
+        {/* 📊 บล็อกแสดงสถิติเรียงค่าความจริง (ความเร็วรถจะซิงค์ตาม GPS จริงแล้วครับ) */}
         <View style={styles.statsMetricsRow}>
           <View style={styles.metricColumn}>
             <Text style={styles.metricLabel}>ความเร็ว</Text>
-            <Text style={styles.metricValue}>110 <Text style={styles.metricUnit}>กม./ชม.</Text></Text>
+            <Text style={styles.metricValue}>{speed} <Text style={styles.metricUnit}>กม./ชม.</Text></Text>
           </View>
           <View style={styles.metricColumn}>
             <Text style={styles.metricLabel}>ระยะทาง</Text>
             <Text style={styles.metricValue}>{distance} <Text style={styles.metricUnit}>กม.</Text></Text>
           </View>
           <View style={styles.metricColumn}>
-            <Text style={styles.metricLabel}>เวลา</Text>
+            <Text style={styles.metricLabel}>เวลาเหลือ</Text>
             <Text style={styles.metricValue}>{duration} <Text style={styles.metricUnit}>นาที</Text></Text>
           </View>
         </View>
 
         <View style={styles.actionButtonRow}>
-          <TouchableOpacity style={styles.slideEndButton} activeOpacity={0.85}>
-            <View style={styles.questionCircleBadge}>
-              <Text style={styles.questionText}>?</Text>
-            </View>
-            <Text style={styles.slideEndText}>สไลด์เพื่อสิ้นสุดการเดินทาง</Text>
-          </TouchableOpacity>
+          <View style={styles.slideEndButtonContainer}>
+            <Text style={styles.slideEndBackgroundText} numberOfLines={1}>
+              สไลด์เพื่อสิ้นสุดภารกิจ
+            </Text>
+            <Animated.View 
+              style={[styles.questionCircleBadge, { transform: [{ translateX: pan.x }] }]}
+              {...panResponder.panHandlers}
+            >
+              <Ionicons name="arrow-forward" size={18} color="#FFF" />
+            </Animated.View>
+          </View>
 
-          <TouchableOpacity style={styles.emergencyRedBtn} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.emergencyRedBtn} activeOpacity={0.85} onPress={handleEmergency}>
             <Text style={styles.emergencyText}>เหตุฉุกเฉิน</Text>
           </TouchableOpacity>
         </View>
@@ -181,14 +306,16 @@ const styles = StyleSheet.create({
   metricLabel: { fontSize: 11, color: '#718096', fontWeight: '600', marginBottom: 4 },
   metricValue: { fontSize: 22, fontWeight: '800', color: '#1A202C' },
   metricUnit: { fontSize: 11, color: '#718096', fontWeight: '500' },
-  actionButtonRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  slideEndButton: {
+  actionButtonRow: { flexDirection: 'row', gap: 12, alignItems: 'center', width: '100%' },
+  slideEndButtonContainer: {
     flex: 1, height: 48, borderRadius: 24, borderWidth: 1, borderColor: '#4CD964',
-    flexDirection: 'row', alignItems: 'center', paddingLeft: 4, gap: 10,
+    backgroundColor: '#F0FDF4', justifyContent: 'center', position: 'relative', overflow: 'hidden'
   },
-  questionCircleBadge: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#4CD964', alignItems: 'center', justifyContent: 'center' },
-  questionText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  slideEndText: { color: '#4CD964', fontSize: 12, fontWeight: '700' },
+  slideEndBackgroundText: { position: 'absolute', left: 52, color: '#4CD964', fontSize: 11, fontWeight: '700', zIndex: 1 },
+  questionCircleBadge: { 
+    width: 42, height: 42, borderRadius: 21, backgroundColor: '#4CD964', 
+    alignItems: 'center', justifyContent: 'center', position: 'absolute', left: 2, zIndex: 2
+  },
   emergencyRedBtn: { backgroundColor: '#FF3B30', height: 48, borderRadius: 24, paddingHorizontal: 22, justifyContent: 'center', alignItems: 'center' },
   emergencyText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 });

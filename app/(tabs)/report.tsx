@@ -59,7 +59,6 @@ export default function ReportPage() {
       try {
         setLoading(true);
         
-        // ดึงข้อมูล Session ปลอดภัย ไม่แครชบนมือถือ
         const { data: sessionData } = await supabase.auth.getSession();
         const userId = sessionData?.session?.user?.id;
         
@@ -126,7 +125,6 @@ export default function ReportPage() {
   return (
     <ScrollView 
       style={styles.container} 
-      // 🟢 💡 แก้ไขจุดนี้: ถมพื้นที่ดันก้นขึ้นมา 160px ป้องกันแถบเมนูลอยมาบังท้ายกราฟเด็ดขาดครับ!
       contentContainerStyle={[styles.scrollContent, { paddingBottom: 160 }]} 
       showsVerticalScrollIndicator={false}
     >
@@ -164,9 +162,10 @@ export default function ReportPage() {
           <View>
             <Text style={styles.scoreTitleText}>คะแนนขับขี่</Text>
             <TouchableOpacity 
-                style={styles.scoreDetailBadge}
-                onPress={() => router.push('/driving-result')} 
-                activeOpacity={0.7}
+              style={styles.scoreDetailBadge}
+              // 💡 เพิ่ม Type Assertion ป้องกันระบบ Expo Route บิวด์ติดขัดกรณีลิ้งค์ข้าม Nested Stack
+              onPress={() => router.push('/driving-result' as any)} 
+              activeOpacity={0.7}
             >
               <Text style={styles.scoreDetailBadgeText}>ผลการขับขี่</Text>
             </TouchableOpacity>
@@ -224,21 +223,22 @@ export default function ReportPage() {
 
         <View style={styles.barChartContainer}>
           {mockChartData.map((item, index) => {
-            const barHeight = item.value > 0 ? (item.value / 100) * 110 : 15; 
+            // ปรับสูตรคำนวณความสูงขั้นต่ำให้พอดีกับเสากราฟ
+            const barHeight = item.value > 0 ? (item.value / 100) * 90 : 8; 
             const isBarActive = item.isCurrentSelected;
 
             return (
               <View key={index} style={styles.chartColumn}>
                 <View style={styles.barTrackArea}>
+                  {/* 💡 อัปเกรด: ย้ายตัวเลขขึ้นมาไว้เหนือหัวแท่งกราฟเพื่อป้องกัน Layout แตกหน้าจอมือถือ/เว็บ */}
+                  <Text style={[styles.barTopValueText, isBarActive && { fontWeight: '700', color: '#004368' }]}>
+                    {item.value > 0 ? `${item.value}%` : '-'}
+                  </Text>
                   <View style={[
                     styles.barFillStick, 
                     { height: barHeight },
                     isBarActive ? styles.barFillStickActive : styles.barFillStickNormal
-                  ]}>
-                    <Text style={[styles.barInsideValueText, isBarActive && { color: '#FFF' }]}>
-                      {item.value > 0 ? `${item.value}%` : '-'}
-                    </Text>
-                  </View>
+                  ]} />
                 </View>
                 <Text style={styles.chartLabelText}>{item.label}</Text>
               </View>
@@ -278,6 +278,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   calendarMonthRow: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -457,11 +458,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   barFillStick: {
-    width: 32,
-    borderRadius: 16,
-    justifyContent: 'flex-start',
-    paddingTop: 8,
-    alignItems: 'center',
+    width: 24,
+    borderRadius: 12,
   },
   barFillStickNormal: {
     backgroundColor: '#A3BFD3',
@@ -469,10 +467,12 @@ const styles = StyleSheet.create({
   barFillStickActive: {
     backgroundColor: '#4A7694',
   },
-  barInsideValueText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#1E293B',
+  barTopValueText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   chartLabelText: {
     fontSize: 11,

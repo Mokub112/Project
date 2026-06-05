@@ -4,12 +4,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 
+// 🗂️ กำหนด Interface มารองรับข้อมูลจริงจากฐานข้อมูลป้องกัน Type Error
+interface MedicalProfile {
+  underlying_disease?: string | null;
+  regular_medication?: string | null;
+  blood_group?: string | null;
+  drug_allergy?: string | null;
+  hospital?: string | null;
+}
+
+interface EmergencyContact {
+  id?: string | number;
+  name?: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  phone_number?: string | null;
+}
+
 export default function MenuPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   
   // 🟢 State สำหรับเก็บข้อมูลทางการแพทย์จริง
-  const [medicalProfile, setMedicalProfile] = useState<any>({
+  const [medicalProfile, setMedicalProfile] = useState<MedicalProfile>({
     underlying_disease: '',
     regular_medication: '',
     blood_group: '',
@@ -18,7 +35,7 @@ export default function MenuPage() {
   });
 
   // 🟢 State สำหรับเก็บรายชื่อผู้ติดต่อฉุกเฉินจากเบสจริง
-  const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
 
   useEffect(() => {
     async function fetchMenuData() {
@@ -32,7 +49,7 @@ export default function MenuPage() {
           const { data: medData, error: medError } = await supabase
             .from('medical_profiles')
             .select('underlying_disease, regular_medication, blood_group, drug_allergy, hospital')
-            .eq('user_id', userId) // หรือถ้าใช้คอลัมน์ id ให้เปลี่ยนเป็น .eq('id', userId) นะครับพี่
+            .eq('user_id', userId)
             .single();
 
           if (!medError && medData) {
@@ -61,7 +78,7 @@ export default function MenuPage() {
   }, []);
 
   // 📞 ฟังก์ชันกดโทรออก
-  const handleEmergencyCall = (phoneNumber: string) => {
+  const handleEmergencyCall = (phoneNumber: string | null | undefined) => {
     if (!phoneNumber) return;
     const url = `tel:${phoneNumber}`;
     Linking.canOpenURL(url)
@@ -85,9 +102,9 @@ export default function MenuPage() {
       try {
         setLoading(true);
         await supabase.auth.signOut();
-        if (Platform.OS === 'web') {
-          localStorage.removeItem('user_id');
-          localStorage.removeItem('user_email');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.localStorage.removeItem('user_id');
+          window.localStorage.removeItem('user_email');
         }
         router.replace('/login');
       } catch (error) {
@@ -173,9 +190,7 @@ export default function MenuPage() {
                     <Ionicons name="person" size={22} color="#94A3B8" />
                   </View>
                   <View>
-                    {/* 💡 ปรับชื่อคอลัมน์ตามใน DB ของพี่ได้เลย เช่น name หรือ contact_name */}
                     <Text style={styles.contactNameText}>{contact.name || contact.contact_name || 'ไม่ระบุชื่อ'}</Text>
-                    {/* 💡 ปรับชื่อคอลัมน์เบอร์โทรตามใน DB เช่น phone หรือ phone_number */}
                     <Text style={styles.contactPhoneText}>{contact.phone || contact.phone_number || '-'}</Text>
                   </View>
                 </View>
@@ -187,7 +202,6 @@ export default function MenuPage() {
                   <Ionicons name="call" size={18} color="#FFF" />
                 </TouchableOpacity>
               </View>
-              {/* ถ้าไม่ใช่แถวสุดท้าย ให้ขีดเส้นคั่นสวย ๆ */}
               {index < emergencyContacts.length - 1 && <View style={styles.rowDivider} />}
             </View>
           ))

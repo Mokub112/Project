@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
@@ -64,7 +64,8 @@ export default function DashboardPage() {
         setLoading(true);
         let { data: { user } } = await supabase.auth.getUser();
         
-        if (!user) {
+        // 💡 แก้ไขจุดบอด: ดักตรวจสอบ typeof window ก่อนเรียกใช้ localStorage เพื่อไม่ให้ระบบบิวด์พังคาเซิร์ฟเวอร์
+        if (!user && typeof window !== 'undefined') {
           const savedEmail = localStorage.getItem('user_email');
           const savedId = localStorage.getItem('user_id');
           if (savedEmail) {
@@ -99,7 +100,6 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedDateStr) {
       const filtered = allTrips.filter(trip => {
-        // ตรวจสอบว่าฟิลด์วันที่สร้าง (created_at หรือ date) ตรงกับวันที่เลือกบนปฏิทินหรือไม่
         const tripDate = trip.created_at ? trip.created_at.split('T')[0] : trip.date;
         return tripDate === selectedDateStr;
       });
@@ -115,11 +115,9 @@ export default function DashboardPage() {
     );
   }
 
-  // ตัวแปรเก็บข้อมูลแสดงผลหลัก (หากวันนั้นมีทริปจริงจะนำมาคำนวณ ถ้าไม่มีจะโชว์แดชบอร์ดว่างเปล่า)
   const hasData = filteredTrips.length > 0;
   const displayData = hasData ? filteredTrips[0] : { speed: 0, distance: 0, score: '-', location: 'ไม่มีประวัติเดินทาง', time: '--:--' };
 
-  // แปลงหัวข้อเดือนและปีให้เป็นภาษาไทยตามจริงในปัจจุบัน
   const thaiMonths = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
@@ -199,13 +197,14 @@ export default function DashboardPage() {
       <View style={styles.centerButtonWrapper}>
         <TouchableOpacity 
           style={styles.startTripButton} 
-          onPress={() => router.push('/destination')}
+          // 💡 แก้ไขจุดสำคัญ: เปลี่ยนเส้นทางให้วิ่งกลับไปเปิดที่โฟลเดอร์กล้องสแกนหรือสิทธิ์ภายนอกให้สัมพันธ์กับแอปจริง
+          onPress={() => router.replace('destination' as any)}
           activeOpacity={0.85}>
           <Text style={styles.startTripText}>เริ่มเดินทาง</Text>
         </TouchableOpacity>
       </View>
 
-      {/* 📅 ปฏิทินแสดงผลของจริง คัดลอกดีไซน์หรูหรา */}
+      {/* 📅 ปฏิทินแสดงผลของจริง */}
       <View style={styles.historyHeaderRow}>
         <Text style={styles.historyTitle}>ประวัติการเดินทาง</Text>
         <TouchableOpacity>
@@ -269,7 +268,7 @@ export default function DashboardPage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7FAFC' },
-  scrollContent: { padding: 20, paddingTop: 50, paddingBottom: 40 },
+  scrollContent: { padding: 20, paddingTop: 50, paddingBottom: 110 }, // 💡 ขยายความสูงด้านล่างกันบังแคปซูลเมนู
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F7FAFC' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   profileSection: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -287,7 +286,7 @@ const styles = StyleSheet.create({
   scoreNumber: { fontSize: 22, fontWeight: '800', color: '#2D3748' },
   statsGrid: { flexDirection: 'row', gap: 14, marginBottom: 20 },
   statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 18, padding: 16, elevation: 2 },
-  statHeader: { flexDirection: 'row', justifyBox: 'space-between', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   statLabel: { fontSize: 13, fontWeight: '600', color: '#718096' },
   miniIconCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#EDF2F7', alignItems: 'center', justifyContent: 'center' },
   statValue: { fontSize: 26, fontWeight: '700', color: '#2D3748' },
