@@ -1,41 +1,51 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useFonts } from 'expo-font';
 import { SplashScreen, Slot } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
-// สั่งคงหน้า Splash Screen ไว้ก่อนจนกว่าฟอนต์จะโหลดเสร็จ
+// ป้องกันไม่ให้ SplashScreen ปิดตัวเองก่อนฟอนต์โหลดเสร็จ
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  // โหลดฟอนต์ระบบตัวเริ่มต้น
+  // 1. โหลดฟอนต์ระบบ
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
-  const [isAuthChecked, setIsAuthChecked] = useState(false);
-
-  // ตรวจสอบสถานะการดาวน์โหลดฟอนต์
+  // 2. ดักตรวจจับกรณีฟอนต์มีปัญหา หรือโหลดเสร็จแล้วให้ซ่อน SplashScreen
   useEffect(() => {
-    if (loaded || error) {
-      SplashScreen.hideAsync();
-      setIsAuthChecked(true); // ปลดล็อกหน้าโหลดดิ้งเมื่อระบบพร้อม
-    }
-  }, [loaded, error]);
+    if (error) throw error;
+  }, [error]);
 
-  // ระหว่างที่ฟอนต์ยังโหลดไม่เสร็จ ให้แสดงหน้าหมุนโหลดดิ้งคลีน ๆ รอไว้ก่อน
-  if (!loaded || !isAuthChecked) {
+  useEffect(() => {
+    if (loaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded]);
+
+  // ถ้าฟอนต์ยังโหลดไม่เสร็จ ให้โชว์ตัวหมุนโหลดดิ้งรอไว้ก่อน
+  if (!loaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F5F9' }}>
+      <View style={styles.loadingCenter}>
         <ActivityIndicator size="large" color="#004368" />
       </View>
     );
   }
 
-  // เมื่อระบบสัมผัสและฟอนต์พร้อม เรนเดอร์โครงสร้างแอปพลิเคชันหลัก
+  // 3. แสดงโครงสร้างหลักของแอป (ครอบด้วย GestureHandler เพื่อป้องกันแอปเอ๋อ)
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Slot />
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC'
+  }
+});

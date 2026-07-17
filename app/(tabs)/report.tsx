@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 
 export default function ReportPage() {
   const router = useRouter();
-  const [allTrips, setAllTrips] = useState<any[]>([]);
-  const [filteredTrip, setFilteredTrip] = useState<any>(null);
+  const [allReportsInWeek, setAllReportsInWeek] = useState<any[]>([]); // เก็บรายงานทั้งหมดของสัปดาห์นั้นเพื่อเอาไปใช้วาดกราฟ
+  const [currentReport, setCurrentReport] = useState<any>(null); // เก็บคะแนนเฉพาะวันที่เลือกแสดงผล
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'day' | 'week' | 'month'>('day');
 
@@ -53,24 +53,32 @@ export default function ReportPage() {
     setSelectedDateStr(`${y}-${m}-${d}`);
   }, []);
 
-  // 🔄 ดึงข้อมูลจากฐานข้อมูล Supabase
+  // 🔄 ดึงข้อมูลจากตาราง driving_reports จริงของสัปดาห์ปัจจุบัน
   useEffect(() => {
     async function fetchReportData() {
       try {
         setLoading(true);
+        let { data: { user } } = await supabase.auth.getUser();
         
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
+        if (!user && typeof window !== 'undefined') {
+          const savedId = localStorage.getItem('user_id');
+          if (savedId) user = { id: savedId } as any;
+        }
         
-        if (userId) {
+        if (user && calendarWeeks.length > 0) {
+          const firstDayOfWeek = calendarWeeks[0].dateString;
+          const lastDayOfWeek = calendarWeeks[6].dateString;
+
+          // ดึงข้อมูลยกแผงทั้งสัปดาห์ เพื่อความสมบูรณ์ในการนำข้อมูลไปพล็อตกราฟแท่งด้านล่าง
           const { data, error } = await supabase
-            .from('driving_reports') 
+            .from('driving_reports') // 🟢 เปลี่ยนกลับมาใช้ตาราง driving_reports ที่ถูกต้องตาม Schema
             .select('*')
-            .eq('user_id', userId)
-            .order('drive_date', { ascending: false });
+            .eq('user_id', user.id)
+            .gte('drive_date', firstDayOfWeek) // ดึงตั้งแต่ต้นสัปดาห์
+            .lte('drive_date', lastDayOfWeek); // ถึงท้ายสัปดาห์
 
           if (!error && data) {
-            setAllTrips(data);
+            setAllReportsInWeek(data);
           }
         }
       } catch (error) {
@@ -82,16 +90,13 @@ export default function ReportPage() {
     fetchReportData();
   }, []);
 
-  // 🔍 ฟิลเตอร์ข้อมูลทริปเมื่อผู้ใช้คลิกเปลี่ยนวันในปฏิทิน
+  // 🔍 เจาะจงรายงานเฉพาะวันที่กดเลือก เพื่อส่งไปอัปเดต UI ส่วนบน
   useEffect(() => {
     if (selectedDateStr) {
-      const matched = allTrips.find(trip => {
-        const tripDate = trip.drive_date || (trip.created_at ? trip.created_at.split('T')[0] : '');
-        return tripDate === selectedDateStr;
-      });
-      setFilteredTrip(matched || null);
+      const matched = allReportsInWeek.find(rep => rep.drive_date === selectedDateStr); // แมตช์กับฟิลด์ drive_date
+      setCurrentReport(matched || null);
     }
-  }, [selectedDateStr, allTrips]);
+  }, [selectedDateStr, allReportsInWeek]);
 
   if (loading) {
     return (
@@ -101,17 +106,18 @@ export default function ReportPage() {
     );
   }
 
-  const displayScore = filteredTrip ? Number(filteredTrip.driving_score) : 0; 
-  const displaySpeed = filteredTrip ? filteredTrip.avg_speed : 0;
-  const displayDistance = filteredTrip ? filteredTrip.distance : 0;
-  const displayTime = filteredTrip ? filteredTrip.duration_minutes : 0;
+  // 💡 แมปค่าตัวแปรให้ตรงตามคอลัมน์ตาราง driving_reports จริงเป๊ะ ๆ
+  const displayScore = currentReport ? (Number(currentReport.driving_score) || 0) : 0; 
+  const displaySpeed = currentReport ? (currentReport.avg_speed || 0) : 0;
+  const displayDistance = currentReport ? (currentReport.distance || 0) : 0;
+  const displayTime = currentReport ? (currentReport.duration_minutes || 0) : 0;
 
-  // 📊 ลิงก์ข้อมูลแท่งกราฟ
-  const mockChartData = calendarWeeks.map((day) => {
-    const tripInDay = allTrips.find(t => (t.drive_date || t.created_at?.split('T')[0]) === day.dateString);
+  // 📊 ประมวลผลแท่งกราฟจากคะแนนจริงในตาราง
+  const chartDataFromDB = calendarWeeks.map((day) => {
+    const reportInDay = allReportsInWeek.find(r => r.drive_date === day.dateString);
     return {
       label: day.dayName,
-      value: tripInDay ? Number(tripInDay.driving_score) : 0,
+      value: reportInDay ? (Number(reportInDay.driving_score) || 0) : 0, // สลับไปอิง driving_score
       isCurrentSelected: day.dateString === selectedDateStr
     };
   });
@@ -163,7 +169,6 @@ export default function ReportPage() {
             <Text style={styles.scoreTitleText}>คะแนนขับขี่</Text>
             <TouchableOpacity 
               style={styles.scoreDetailBadge}
-              // 💡 เพิ่ม Type Assertion ป้องกันระบบ Expo Route บิวด์ติดขัดกรณีลิ้งค์ข้าม Nested Stack
               onPress={() => router.push('/driving-result' as any)} 
               activeOpacity={0.7}
             >
@@ -207,7 +212,7 @@ export default function ReportPage() {
         </View>
       </View>
 
-      {/* 📊 4. โซนกล่องกราฟแท่งวิเคราะห์พฤติกรรม */}
+      {/* 📊 4. โซนกล่องกราฟแท่งวิเคราะห์พฤติกรรมย้อนหลังในสัปดาห์ */}
       <View style={styles.chartWrapperCard}>
         <View style={styles.filterTabContainer}>
           <TouchableOpacity style={[styles.filterTabButton, activeTab === 'day' && styles.filterTabButtonActive]} onPress={() => setActiveTab('day')}>
@@ -222,15 +227,13 @@ export default function ReportPage() {
         </View>
 
         <View style={styles.barChartContainer}>
-          {mockChartData.map((item, index) => {
-            // ปรับสูตรคำนวณความสูงขั้นต่ำให้พอดีกับเสากราฟ
+          {chartDataFromDB.map((item, index) => {
             const barHeight = item.value > 0 ? (item.value / 100) * 90 : 8; 
             const isBarActive = item.isCurrentSelected;
 
             return (
               <View key={index} style={styles.chartColumn}>
                 <View style={styles.barTrackArea}>
-                  {/* 💡 อัปเกรด: ย้ายตัวเลขขึ้นมาไว้เหนือหัวแท่งกราฟเพื่อป้องกัน Layout แตกหน้าจอมือถือ/เว็บ */}
                   <Text style={[styles.barTopValueText, isBarActive && { fontWeight: '700', color: '#004368' }]}>
                     {item.value > 0 ? `${item.value}%` : '-'}
                   </Text>

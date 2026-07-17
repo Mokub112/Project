@@ -2,22 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Linking, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
-// 🗂️ กำหนด Interface มารองรับข้อมูลจริงจากฐานข้อมูลป้องกัน Type Error
 interface MedicalProfile {
-  underlying_disease?: string | null;
+  congenital_disease?: string | null;
   regular_medication?: string | null;
   blood_group?: string | null;
   drug_allergy?: string | null;
-  hospital?: string | null;
+  regular_hospital?: string | null;
 }
 
 interface EmergencyContact {
-  id?: string | number;
-  name?: string | null;
+  id: string | number;
   contact_name?: string | null;
-  phone?: string | null;
   phone_number?: string | null;
 }
 
@@ -25,59 +22,60 @@ export default function MenuPage() {
   const router = useRouter();
   const [loading, setLoading] = useState<boolean>(true);
   
-  // 🟢 State สำหรับเก็บข้อมูลทางการแพทย์จริง
   const [medicalProfile, setMedicalProfile] = useState<MedicalProfile>({
-    underlying_disease: '',
+    congenital_disease: '',
     regular_medication: '',
     blood_group: '',
     drug_allergy: '',
-    hospital: '',
+    regular_hospital: '',
   });
 
-  // 🟢 State สำหรับเก็บรายชื่อผู้ติดต่อฉุกเฉินจากเบสจริง
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
 
-  useEffect(() => {
-    async function fetchMenuData() {
-      try {
-        setLoading(true);
-        const { data: sessionData } = await supabase.auth.getSession();
-        const userId = sessionData?.session?.user?.id;
+  // ใช้ useFocusEffect เพื่อให้หน้าจอดึงข้อมูลใหม่ทุกครั้งที่ผู้ใช้กดย้อนกลับมาจากหน้าแก้ไขข้อมูล
+  useFocusEffect(
+    React.useCallback(() => {
+      async function fetchMenuData() {
+        try {
+          setLoading(true);
+          const { data: sessionData } = await supabase.auth.getSession();
+          const userId = sessionData?.session?.user?.id;
 
-        if (userId) {
-          // 1. ดึงข้อมูลจากตาราง medical_profiles ของพี่จริง ๆ
-          const { data: medData, error: medError } = await supabase
-            .from('medical_profiles')
-            .select('underlying_disease, regular_medication, blood_group, drug_allergy, hospital')
-            .eq('user_id', userId)
-            .single();
+          if (userId) {
+            const { data: medData, error: medError } = await supabase
+              .from('medical_profiles')
+              .select('congenital_disease, regular_medication, blood_group, drug_allergy, regular_hospital')
+              .eq('user_id', userId)
+              .maybeSingle();
 
-          if (!medError && medData) {
-            setMedicalProfile(medData);
+            if (!medError && medData) {
+              setMedicalProfile(medData);
+            } else {
+              // ล้างค่าหากไม่มีข้อมูล
+              setMedicalProfile({ congenital_disease: '', regular_medication: '', blood_group: '', drug_allergy: '', regular_hospital: '' });
+            }
+
+            const { data: contactData, error: contactError } = await supabase
+              .from('emergency_contacts')
+              .select('id, contact_name, phone_number')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: true });
+
+            if (!contactError && contactData) {
+              setEmergencyContacts(contactData);
+            }
           }
-
-          // 2. ดึงข้อมูลจากตาราง emergency_contacts ของพี่จริง ๆ
-          const { data: contactData, error: contactError } = await supabase
-            .from('emergency_contacts')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: true });
-
-          if (!contactError && contactData) {
-            setEmergencyContacts(contactData);
-          }
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching data from DB:', error);
-      } finally {
-        setLoading(false);
       }
-    }
 
-    fetchMenuData();
-  }, []);
+      fetchMenuData();
+    }, [])
+  );
 
-  // 📞 ฟังก์ชันกดโทรออก
   const handleEmergencyCall = (phoneNumber: string | null | undefined) => {
     if (!phoneNumber) return;
     const url = `tel:${phoneNumber}`;
@@ -96,23 +94,14 @@ export default function MenuPage() {
       .catch((err) => console.error('Error calling:', err));
   };
 
-  // 🚪 ฟังก์ชันออกจากระบบ
   const handleSignOut = async () => {
     const performSignOut = async () => {
       try {
         setLoading(true);
         await supabase.auth.signOut();
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.localStorage.removeItem('user_id');
-          window.localStorage.removeItem('user_email');
-        }
         router.replace('/login');
       } catch (error) {
-        if (Platform.OS === 'web') {
-          window.alert('เกิดข้อผิดพลาด ไม่สามารถออกจากระบบได้');
-        } else {
-          Alert.alert('ผิดพลาด', 'ไม่สามารถออกจากระบบได้');
-        }
+        Alert.alert('ผิดพลาด', 'ไม่สามารถออกจากระบบได้');
       } finally {
         setLoading(false);
       }
@@ -145,13 +134,18 @@ export default function MenuPage() {
       
       <Text style={styles.mainHeaderTitle}>เมนู</Text>
 
-      {/* 🏥 1. ข้อมูลทางการแพทย์ (ดึงจาก medical_profiles) */}
+      {/* 🏥 1. ข้อมูลทางการแพทย์ */}
       <View style={styles.medicalCardWithBorder}>
-        <Text style={styles.cardMainHeader}>ข้อมูลทางการแพทย์ (ฉุกเฉิน)</Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardMainHeader}>ข้อมูลทางการแพทย์ (ฉุกเฉิน)</Text>
+          <TouchableOpacity onPress={() => router.push('/edit-menu')} style={styles.editIconButton}>
+            <Ionicons name="create-outline" size={20} color="#004368" />
+          </TouchableOpacity>
+        </View>
         
         <View style={styles.medDataRow}>
           <Text style={styles.medLabel}>โรคประจำตัว :</Text>
-          <Text style={styles.medValue}>{medicalProfile.underlying_disease || '-'}</Text>
+          <Text style={styles.medValue}>{medicalProfile.congenital_disease || '-'}</Text>
         </View>
 
         <View style={styles.medDataRow}>
@@ -171,13 +165,18 @@ export default function MenuPage() {
 
         <View style={styles.medDataRow}>
           <Text style={styles.medLabel}>โรงพยาบาลประจำ :</Text>
-          <Text style={styles.medValue}>{medicalProfile.hospital || '-'}</Text>
+          <Text style={styles.medValue}>{medicalProfile.regular_hospital || '-'}</Text>
         </View>
       </View>
 
-      {/* 👥 2. ผู้ติดต่อฉุกเฉิน (ดึงจาก emergency_contacts) */}
+      {/* 👥 2. ผู้ติดต่อฉุกเฉิน */}
       <View style={styles.contactCardWithBorder}>
-        <Text style={styles.cardMainHeaderCenter}>ติดต่อ (ฉุกเฉิน)</Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardMainHeader}>ติดต่อ (ฉุกเฉิน)</Text>
+          <TouchableOpacity onPress={() => router.push('/edit-menu')} style={styles.editIconButton}>
+            <Ionicons name="create-outline" size={20} color="#004368" />
+          </TouchableOpacity>
+        </View>
         
         {emergencyContacts.length === 0 ? (
           <Text style={styles.emptyContactText}>ยังไม่มีรายชื่อผู้ติดต่อฉุกเฉิน</Text>
@@ -190,13 +189,13 @@ export default function MenuPage() {
                     <Ionicons name="person" size={22} color="#94A3B8" />
                   </View>
                   <View>
-                    <Text style={styles.contactNameText}>{contact.name || contact.contact_name || 'ไม่ระบุชื่อ'}</Text>
-                    <Text style={styles.contactPhoneText}>{contact.phone || contact.phone_number || '-'}</Text>
+                    <Text style={styles.contactNameText}>{contact.contact_name || 'ไม่ระบุชื่อ'}</Text>
+                    <Text style={styles.contactPhoneText}>{contact.phone_number || '-'}</Text>
                   </View>
                 </View>
                 <TouchableOpacity 
                   style={styles.callButtonCircle} 
-                  onPress={() => handleEmergencyCall(contact.phone || contact.phone_number)} 
+                  onPress={() => handleEmergencyCall(contact.phone_number)} 
                   activeOpacity={0.7}
                 >
                   <Ionicons name="call" size={18} color="#FFF" />
@@ -219,7 +218,7 @@ export default function MenuPage() {
         </TouchableOpacity>
       </View>
 
-      {/* 🔴 4. ปุ่มออกจากระบบกว้างเต็ม 100% สวยงามตรงตามดีไซน์ */}
+      {/* 🔴 4. ปุ่มออกจากระบบ */}
       <View style={styles.logoutWrapper}>
         <TouchableOpacity style={styles.dangerSignOutButton} onPress={handleSignOut} activeOpacity={0.85}>
           <Text style={styles.dangerSignOutText}>ออกจากระบบ</Text>
@@ -240,8 +239,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#E2E8F0', elevation: 3,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6,
   },
-  cardMainHeader: { fontSize: 14, fontWeight: '700', color: '#334155', textAlign: 'center', marginBottom: 16 },
-  cardMainHeaderCenter: { fontSize: 14, fontWeight: '700', color: '#334155', textAlign: 'center', marginBottom: 14 },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  cardMainHeader: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  editIconButton: { padding: 4 },
   medDataRow: { flexDirection: 'row', marginBottom: 8 },
   medLabel: { width: 125, fontSize: 13, fontWeight: '600', color: '#475569' },
   medValue: { flex: 1, fontSize: 13, fontWeight: '500', color: '#64748B' },

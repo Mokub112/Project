@@ -2,40 +2,38 @@ import React, { useEffect, useState } from 'react';
 import { Tabs, useRouter, usePathname } from 'expo-router';
 import { StyleSheet, View, Text, Platform, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 🚀 นำเข้าเพื่อตรวจสถานะล็อกอินก่อนยอมให้แสดงหน้าเมนูหลัก
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function TabLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const [isReady, setIsReady] = useState(false);
 
-  // 🛡️ ระบบ Guard ป้องกันลักไก่: ตรวจสอบสิทธิ์ตั้งแต่ก้าวแรกที่เข้าสู่โซนหน้าหลัก
+  // 🛡️ ระบบ Guard ตรวจสอบสิทธิ์การเข้าใช้งานหน้าหลัก
   useEffect(() => {
     async function checkAuth() {
       try {
         const userSession = await AsyncStorage.getItem('user_session');
-        // ⚠️ หากพบว่าไม่มีสถานะเซสชัน หรือล็อกเอาต์ไปแล้ว ให้ดีดกลับไปหน้าล็อกอินทันที ไม่ยอมให้จอดค้างที่หน้าหลัก
         if (!userSession || userSession !== 'authenticated') {
           router.replace('/login');
         } else {
-          setIsReady(true); // ปลดล็อกให้แสดงผล UI เมนูด้านล่างอย่างปลอดภัย
+          setIsReady(true); 
         }
       } catch (err) {
         router.replace('/login');
       }
     }
     checkAuth();
-  }, [pathname]); // 💡 คอยตรวจจับทุกครั้งที่มีการเปลี่ยนหน้าพยายามย้าย Route
+  }, [pathname]); 
 
-  // 🎯 ปรับปรุงเส้นทาง (Route) ให้สอดคล้องกับกลุ่มโฟลเดอร์ (tabs) เพื่อให้ระบบจดจำโฟกัสแม่นยำ
+  // 🎯 ปรับ Route เส้นทางเทียบฐานเพื่อให้จับตำแหน่งการกดลิงก์ได้แม่นยำ
   const tabs = [
-    { id: 'index', route: '/(tabs)', label: 'หน้าหลัก', activeIcon: 'home' as const, inactiveIcon: 'home-outline' as const },
-    { id: 'report', route: '/(tabs)/report', label: 'รายงาน', activeIcon: 'document-text' as const, inactiveIcon: 'document-text-outline' as const },
-    { id: 'video', route: '/(tabs)/video', label: 'วิดีโอ', activeIcon: 'play' as const, inactiveIcon: 'play-outline' as const },
-    { id: 'menu', route: '/(tabs)/menu', label: 'เมนู', activeIcon: 'grid' as const, inactiveIcon: 'grid-outline' as const },
+    { id: 'index', route: '/', label: 'หน้าหลัก', activeIcon: 'home' as const, inactiveIcon: 'home-outline' as const },
+    { id: 'report', route: '/report', label: 'รายงาน', activeIcon: 'document-text' as const, inactiveIcon: 'document-text-outline' as const },
+    { id: 'video', route: '/video', label: 'วิดีโอ', activeIcon: 'play' as const, inactiveIcon: 'play-outline' as const },
+    { id: 'menu', route: '/menu', label: 'เมนู', activeIcon: 'grid' as const, inactiveIcon: 'grid-outline' as const },
   ];
 
-  // ระหว่างที่ระบบ Guard กำลังคุ้ยหา Token ในเครื่อง ให้ขึ้น Loading สวยๆ บังหน้าจอหลักไว้ก่อน
   if (!isReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
@@ -46,11 +44,10 @@ export default function TabLayout() {
 
   return (
     <View style={styles.masterContainer}>
-      {/* 1. คอนโทรลเลอร์คุมหน้าจอหลักของ Expo Router */}
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { display: 'none' }, // ซ่อนแถบดีไซน์ดั้งเดิมของระบบ
+          tabBarStyle: { display: 'none' }, // ซ่อนแถบเดิมของระบบ
         }}
       >
         <Tabs.Screen name="index" />
@@ -59,15 +56,16 @@ export default function TabLayout() {
         <Tabs.Screen name="menu" />
       </Tabs>
 
-      {/* 🌟 2. แผงแคปซูลลอย Custom ตัวจบ */}
+      {/* 🌟 2. แผงแคปซูลลอย Custom แท็บ */}
       <View style={styles.floatingTabBar}>
         {tabs.map((tab) => {
-          // 💡 เช็กสถานะโฟกัสผ่านรูปแบบ Absolute Group Route เพื่อป้องกันอาการปุ่มเบิ้ลหรือไอคอนไม่สว่าง
-          const isFocused = pathname === tab.route || (tab.route === '/(tabs)' && pathname === '/');
+          // 💡 แก้ไขเงื่อนไขการเช็กโฟกัสใหม่: เทียบตรงๆ หรือใช้ตรวจสอบเส้นทางย่อยเพื่อให้ปุ่มสว่างตามจริง
+          const isFocused = pathname === tab.route || (tab.route !== '/' && pathname.startsWith(tab.route));
 
           return (
             <TouchableOpacity
               key={tab.id}
+              // เปลี่ยนมาใช้ router.push หรือสลับสล็อตผ่านแท็บของ expo-router โดยตรง
               onPress={() => router.navigate(tab.route as any)}
               activeOpacity={0.85}
               style={styles.tabButton}
